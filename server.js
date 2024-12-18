@@ -6,51 +6,44 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: "https://ton-site-netlify.app", // Remplace par l'URL réelle de ton site Netlify
+        origin: "https://ton-site-netlify.app", // Remplace par ton URL Netlify
         methods: ["GET", "POST"],
     },
 });
 
-// Raquettes
-let playerPositions = {
-    player1: 200,
-    player2: 200,
-};
-
-// Scores
-let scores = {
-    player1: 0,
-    player2: 0,
-};
+// Positions initiales des raquettes et scores
+let playerPositions = { player1: 200, player2: 200 };
+let scores = { player1: 0, player2: 0 };
 
 // Balle
-let ball = {
-    x: 400,
-    y: 200,
-    radius: 8,
-    speedX: 4,
-    speedY: 2,
-};
+let ball = { x: 400, y: 200, radius: 8, speedX: 4, speedY: 2 };
 
-// Chronomètre
+// Chronomètre et état du jeu
 let countdown = 15;
 let isGameStarted = false;
 
-// Identifie les joueurs
+// Gestion des joueurs connectés
 let players = [];
 
-// Fonction pour réinitialiser le jeu
+// Réinitialiser le jeu
 function resetGame() {
     scores = { player1: 0, player2: 0 };
-    playerPositions = { player1: 200, player2: 200 };
     ball = { x: 400, y: 200, radius: 8, speedX: 4, speedY: 2 };
     isGameStarted = false;
     countdown = 15;
-    io.emit('updateScores', scores);
     io.emit('resetGame', countdown);
+    io.emit('updateScores', scores);
 }
 
-// Mise à jour de la balle
+// Réinitialiser la balle
+function resetBall() {
+    ball.x = 400;
+    ball.y = 200;
+    ball.speedX = Math.random() > 0.5 ? 4 : -4;
+    ball.speedY = Math.random() > 0.5 ? 2 : -2;
+}
+
+// Mettre à jour la position de la balle
 function updateBall() {
     if (!isGameStarted) return;
 
@@ -69,8 +62,7 @@ function updateBall() {
         ball.y < playerPositions.player1 + 100
     ) {
         ball.speedX = -ball.speedX;
-        const impactY = ball.y - (playerPositions.player1 + 50);
-        ball.speedY = impactY * 0.3;
+        ball.speedY += (ball.y - (playerPositions.player1 + 50)) * 0.3;
     }
 
     // Collision avec la raquette du joueur 2
@@ -80,11 +72,10 @@ function updateBall() {
         ball.y < playerPositions.player2 + 100
     ) {
         ball.speedX = -ball.speedX;
-        const impactY = ball.y - (playerPositions.player2 + 50);
-        ball.speedY = impactY * 0.3;
+        ball.speedY += (ball.y - (playerPositions.player2 + 50)) * 0.3;
     }
 
-    // Vérifie si la balle est hors des limites
+    // Vérifier si la balle sort du terrain
     if (ball.x - ball.radius <= 0) {
         scores.player2++;
         io.emit('updateScores', scores);
@@ -95,20 +86,19 @@ function updateBall() {
         resetBall();
     }
 
+    // Vérifier si un joueur a gagné
+    if (scores.player1 >= 10 || scores.player2 >= 10) {
+        io.emit('gameOver', { winner: scores.player1 >= 10 ? 1 : 2 });
+        resetGame();
+    }
+
     io.emit('updateBall', ball);
 }
 
-// Réinitialisation de la balle
-function resetBall() {
-    ball.x = 400;
-    ball.y = 200;
-    ball.speedX = Math.random() > 0.5 ? 4 : -4;
-    ball.speedY = Math.random() > 0.5 ? 2 : -2;
-}
-
-// Chronomètre synchronisé
+// Démarrer le chronomètre
 function startCountdown() {
     if (isGameStarted || players.length < 2) return;
+
     const interval = setInterval(() => {
         if (countdown > 0) {
             countdown--;
@@ -121,16 +111,15 @@ function startCountdown() {
     }, 1000);
 }
 
+// Gérer les connexions des joueurs
 io.on('connection', (socket) => {
-    console.log(`Un joueur connecté : ${socket.id}`);
+    console.log(`Joueur connecté : ${socket.id}`);
 
-    // Assigne le joueur 1 ou 2
     if (players.length < 2) {
         players.push(socket.id);
-        if (players.length === 1) {
-            socket.emit('player', { player: 1 });
-        } else {
-            socket.emit('player', { player: 2 });
+        socket.emit('player', { player: players.length });
+
+        if (players.length === 2) {
             startCountdown();
         }
     } else {
@@ -138,7 +127,7 @@ io.on('connection', (socket) => {
         return;
     }
 
-    // Réception de la position de la raquette
+    // Recevoir les mouvements de raquette
     socket.on('move', (data) => {
         if (socket.id === players[0]) {
             playerPositions.player1 = data.y;
@@ -150,18 +139,16 @@ io.on('connection', (socket) => {
 
     // Déconnexion d'un joueur
     socket.on('disconnect', () => {
-        console.log(`Un joueur déconnecté : ${socket.id}`);
+        console.log(`Joueur déconnecté : ${socket.id}`);
         players = players.filter((id) => id !== socket.id);
-        if (players.length < 2) {
-            resetGame();
-        }
+        resetGame();
     });
 });
 
-// Boucle de mise à jour de la balle
+// Boucle principale pour la balle
 setInterval(updateBall, 16); // 60 FPS
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`Serveur en écoute sur le port ${PORT}`);
+    console.log(`Serveur démarré sur le port ${PORT}`);
 });
