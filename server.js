@@ -23,6 +23,15 @@ let scores = {
     player2: 0,
 };
 
+// Balle
+let ball = {
+    x: 400,
+    y: 200,
+    radius: 8,
+    speedX: 4,
+    speedY: 2,
+};
+
 // Chronomètre
 let countdown = 15;
 let isGameStarted = false;
@@ -34,15 +43,72 @@ let players = [];
 function resetGame() {
     scores = { player1: 0, player2: 0 };
     playerPositions = { player1: 200, player2: 200 };
+    ball = { x: 400, y: 200, radius: 8, speedX: 4, speedY: 2 };
     isGameStarted = false;
     countdown = 15;
     io.emit('updateScores', scores);
     io.emit('resetGame', countdown);
 }
 
+// Mise à jour de la balle
+function updateBall() {
+    if (!isGameStarted) return;
+
+    ball.x += ball.speedX;
+    ball.y += ball.speedY;
+
+    // Collision avec les murs horizontaux
+    if (ball.y - ball.radius <= 0 || ball.y + ball.radius >= 400) {
+        ball.speedY = -ball.speedY;
+    }
+
+    // Collision avec la raquette du joueur 1
+    if (
+        ball.x - ball.radius <= 20 &&
+        ball.y > playerPositions.player1 &&
+        ball.y < playerPositions.player1 + 100
+    ) {
+        ball.speedX = -ball.speedX;
+        const impactY = ball.y - (playerPositions.player1 + 50);
+        ball.speedY = impactY * 0.3;
+    }
+
+    // Collision avec la raquette du joueur 2
+    if (
+        ball.x + ball.radius >= 780 &&
+        ball.y > playerPositions.player2 &&
+        ball.y < playerPositions.player2 + 100
+    ) {
+        ball.speedX = -ball.speedX;
+        const impactY = ball.y - (playerPositions.player2 + 50);
+        ball.speedY = impactY * 0.3;
+    }
+
+    // Vérifie si la balle est hors des limites
+    if (ball.x - ball.radius <= 0) {
+        scores.player2++;
+        io.emit('updateScores', scores);
+        resetBall();
+    } else if (ball.x + ball.radius >= 800) {
+        scores.player1++;
+        io.emit('updateScores', scores);
+        resetBall();
+    }
+
+    io.emit('updateBall', ball);
+}
+
+// Réinitialisation de la balle
+function resetBall() {
+    ball.x = 400;
+    ball.y = 200;
+    ball.speedX = Math.random() > 0.5 ? 4 : -4;
+    ball.speedY = Math.random() > 0.5 ? 2 : -2;
+}
+
 // Chronomètre synchronisé
 function startCountdown() {
-    if (isGameStarted || players.length < 2) return; // Ne démarre pas si une partie est en cours ou si moins de 2 joueurs
+    if (isGameStarted || players.length < 2) return;
     const interval = setInterval(() => {
         if (countdown > 0) {
             countdown--;
@@ -65,7 +131,7 @@ io.on('connection', (socket) => {
             socket.emit('player', { player: 1 });
         } else {
             socket.emit('player', { player: 2 });
-            startCountdown(); // Démarre le chrono uniquement après l'arrivée du 2e joueur
+            startCountdown();
         }
     } else {
         socket.emit('error', 'Partie pleine');
@@ -82,34 +148,18 @@ io.on('connection', (socket) => {
         socket.broadcast.emit('opponentMove', { y: data.y });
     });
 
-    // Gestion des scores
-    socket.on('score', (data) => {
-        if (data.player === 1) {
-            scores.player1++;
-        } else if (data.player === 2) {
-            scores.player2++;
-        }
-
-        // Vérifie si un joueur a gagné
-        if (scores.player1 >= 10 || scores.player2 >= 10) {
-            io.emit('gameOver', { winner: scores.player1 >= 10 ? 1 : 2 });
-            resetGame();
-        } else {
-            io.emit('updateScores', scores);
-        }
-    });
-
     // Déconnexion d'un joueur
     socket.on('disconnect', () => {
         console.log(`Un joueur déconnecté : ${socket.id}`);
         players = players.filter((id) => id !== socket.id);
-
-        // Réinitialise le jeu si un joueur se déconnecte
-        if (players.length < 2 && isGameStarted) {
+        if (players.length < 2) {
             resetGame();
         }
     });
 });
+
+// Boucle de mise à jour de la balle
+setInterval(updateBall, 16); // 60 FPS
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
