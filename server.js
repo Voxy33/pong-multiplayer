@@ -6,7 +6,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: "https://papaya-mochi-4e909d.netlify.app", // Remplace par l'URL réelle de ton site Netlify
+        origin: "https://papaya-mochi-4e909d.netlify.app", // Remplace par l'URL de ton site Netlify
         methods: ["GET", "POST"],
     },
 });
@@ -15,16 +15,6 @@ const io = new Server(server, {
 let playerPositions = {
     player1: 200,
     player2: 200,
-};
-
-// Balle
-let ball = {
-    x: 400,
-    y: 200,
-    radius: 8,
-    speedX: 4,
-    speedY: 2,
-    maxSpeed: 8,
 };
 
 // Identifie les joueurs
@@ -53,6 +43,8 @@ io.on('connection', (socket) => {
         } else if (socket.id === players[1]) {
             playerPositions.player2 = data.y;
         }
+        // Diffuse la position mise à jour aux autres joueurs
+        socket.broadcast.emit('opponentMove', { y: data.y });
     });
 
     // Déconnexion d'un joueur
@@ -61,55 +53,6 @@ io.on('connection', (socket) => {
         players = players.filter((id) => id !== socket.id);
     });
 });
-
-// Mise à jour de la balle
-function updateBall() {
-    ball.x += ball.speedX;
-    ball.y += ball.speedY;
-
-    // Collision avec les murs horizontaux
-    if (ball.y - ball.radius <= 0 || ball.y + ball.radius >= 400) {
-        ball.speedY = -ball.speedY;
-    }
-
-    // Collision avec la raquette du joueur 1
-    if (
-        ball.x - ball.radius <= 20 &&
-        ball.y > playerPositions.player1 &&
-        ball.y < playerPositions.player1 + 100
-    ) {
-        ball.speedX = -ball.speedX;
-        const hitPosition = ball.y - (playerPositions.player1 + 50);
-        ball.speedY = hitPosition * 0.3;
-        ball.speedY = Math.min(ball.maxSpeed, Math.max(-ball.maxSpeed, ball.speedY));
-    }
-
-    // Collision avec la raquette du joueur 2
-    if (
-        ball.x + ball.radius >= 780 &&
-        ball.y > playerPositions.player2 &&
-        ball.y < playerPositions.player2 + 100
-    ) {
-        ball.speedX = -ball.speedX;
-        const hitPosition = ball.y - (playerPositions.player2 + 50);
-        ball.speedY = hitPosition * 0.3;
-        ball.speedY = Math.min(ball.maxSpeed, Math.max(-ball.maxSpeed, ball.speedY));
-    }
-
-    // Réinitialisation si la balle sort des limites
-    if (ball.x - ball.radius <= 0 || ball.x + ball.radius >= 800) {
-        ball.x = 400;
-        ball.y = 200;
-        ball.speedX = 4;
-        ball.speedY = 2;
-    }
-
-    // Envoie la position de la balle et des raquettes aux clients
-    io.emit('update', { ball, playerPositions });
-}
-
-// Boucle de mise à jour
-setInterval(updateBall, 16); // Environ 60 FPS
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
