@@ -40,8 +40,9 @@ function resetGame() {
     io.emit('resetGame', countdown);
 }
 
-// Démarre le chronomètre synchronisé
+// Chronomètre synchronisé
 function startCountdown() {
+    if (isGameStarted || players.length < 2) return; // Ne démarre pas si une partie est en cours ou si moins de 2 joueurs
     const interval = setInterval(() => {
         if (countdown > 0) {
             countdown--;
@@ -64,9 +65,7 @@ io.on('connection', (socket) => {
             socket.emit('player', { player: 1 });
         } else {
             socket.emit('player', { player: 2 });
-            if (!isGameStarted) {
-                startCountdown();
-            }
+            startCountdown(); // Démarre le chrono uniquement après l'arrivée du 2e joueur
         }
     } else {
         socket.emit('error', 'Partie pleine');
@@ -104,6 +103,11 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => {
         console.log(`Un joueur déconnecté : ${socket.id}`);
         players = players.filter((id) => id !== socket.id);
+
+        // Réinitialise le jeu si un joueur se déconnecte
+        if (players.length < 2 && isGameStarted) {
+            resetGame();
+        }
     });
 });
 
