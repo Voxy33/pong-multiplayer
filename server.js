@@ -6,7 +6,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: "https://ton-site-netlify.app", // Remplace par l'URL de ton site Netlify
+        origin: "https://ton-site-netlify.app", // Remplace par l'URL réelle de ton site Netlify
         methods: ["GET", "POST"],
     },
 });
@@ -30,26 +30,26 @@ let isGameStarted = false;
 // Identifie les joueurs
 let players = [];
 
-// Fonction pour réinitialiser les scores et les positions
+// Fonction pour réinitialiser le jeu
 function resetGame() {
     scores = { player1: 0, player2: 0 };
     playerPositions = { player1: 200, player2: 200 };
     isGameStarted = false;
     countdown = 15;
     io.emit('updateScores', scores);
-    io.emit('resetGame', countdown); // Synchronise le chrono entre les joueurs
+    io.emit('resetGame', countdown);
 }
 
-// Chronomètre partagé
+// Démarre le chronomètre synchronisé
 function startCountdown() {
     const interval = setInterval(() => {
         if (countdown > 0) {
             countdown--;
-            io.emit('updateCountdown', countdown); // Envoie le chrono aux joueurs
+            io.emit('updateCountdown', countdown);
         } else {
             clearInterval(interval);
             isGameStarted = true;
-            io.emit('startGame'); // Notifie les joueurs que le jeu commence
+            io.emit('startGame');
         }
     }, 1000);
 }
@@ -65,7 +65,7 @@ io.on('connection', (socket) => {
         } else {
             socket.emit('player', { player: 2 });
             if (!isGameStarted) {
-                startCountdown(); // Démarre le chrono lorsque 2 joueurs sont connectés
+                startCountdown();
             }
         }
     } else {
@@ -94,7 +94,7 @@ io.on('connection', (socket) => {
         // Vérifie si un joueur a gagné
         if (scores.player1 >= 10 || scores.player2 >= 10) {
             io.emit('gameOver', { winner: scores.player1 >= 10 ? 1 : 2 });
-            resetGame(); // Réinitialise le jeu après la victoire
+            resetGame();
         } else {
             io.emit('updateScores', scores);
         }
