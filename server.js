@@ -5,13 +5,14 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 
-// Configuration de Socket.IO avec CORS
 const io = new Server(server, {
   cors: {
-    origin: "https://papaya-mochi-4e909d.netlify.app", // Remplace par l'URL de ton site Netlify
-    methods: ["GET", "POST"] // Méthodes autorisées
-  }
+      origin: "https://papaya-mochi-4e909d.netlify.app", // Ton URL Netlify
+      methods: ["GET", "POST"],
+      credentials: true, // Si nécessaire
+  },
 });
+
 
 // Exemple de route
 app.get('/', (req, res) => {
